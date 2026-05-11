@@ -1,14 +1,12 @@
 import os
 import requests
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 from flask import Flask, request, Response
 
 app = Flask(__name__)
 
-# Récupération des identifiants du proxy depuis les variables d'environnement Render
-# ⚠️ TRÈS IMPORTANT : Ces variables d'environnement DOIVENT être définies dans Render
-PROXY_USER = os.environ.get('PROXY_USER', 'mon_utilisateur')
-PROXY_PASS = os.environ.get('PROXY_PASS', 'mon_mot_de_passe_securise')
+PROXY_USER = os.environ.get('PROXY_USER', 'monuser')
+PROXY_PASS = os.environ.get('PROXY_PASS', 'monpass')
 
 def verifier_authentification():
     auth = request.authorization
@@ -22,33 +20,30 @@ def proxy():
     if erreur_auth:
         return erreur_auth
 
-    # Récupération et validation de l'URL cible
-    url_destination = request.args.get('url')
-    if not url_destination:
+    url_cible = request.args.get('url')
+    if not url_cible:
         return "Paramètre 'url' manquant", 400
 
-    # On conserve les en-têtes nécessaires
+    # Pour les requêtes POST, on conserve les données du corps
+    corps = request.get_data()
+    
+    # On transmet les en-têtes essentiels
     en_tetes_a_conserver = ['content-type', 'user-agent', 'accept', 'origin', 'referer']
     en_tetes = {k: v for k, v in request.headers if k.lower() in en_tetes_a_conserver}
 
-    # On gère le corps de la requête (important pour les uploads)
-    corps = request.get_data()
-
     try:
-        # Envoi de la requête vers la destination *depuis Render*
         reponse = requests.request(
             method=request.method,
-            url=url_destination,
+            url=url_cible,
             headers=en_tetes,
             data=corps,
             cookies=request.cookies,
             allow_redirects=False,
-            timeout=60  # Timeout plus long pour les fichiers volumineux
+            timeout=60
         )
     except Exception as e:
         return f"Erreur lors de l'appel vers la destination : {str(e)}", 500
 
-    # On renvoie la réponse brute au client
     return Response(reponse.content, status=reponse.status_code, headers=dict(reponse.headers))
 
 @app.route('/health')
